@@ -1,0 +1,144 @@
+###
+Crypto Strategies
+A. BB Bot
+
+Strategy is based on Bollinger Bands indicator
+
+###
+
+talib = require 'talib' # import technical indicators library (https://cryptotrader.org/talib)
+trading = require 'trading' # import core trading 
+params = require 'params'
+
+init: (context)->
+  
+    #param1 = params.add "param1", ""
+  
+    context.lastbought=0    #THESE 3 VARIABLES WILL SUPORT REPORT CALCULATIONS
+    context.tradeswon=0     #CALCULATE TRADES WON
+    context.tradeslost=0
+    
+    context.buysignal='off'
+    
+    context.emafast=params.add "Fast Moving Average", "150"     #EMA fast
+    context.emaslow=params.add "Slow Moving Average", "288"    #EMA slow
+    
+    context.bblowcount=0
+    context.bblowdelay=2   #BB delay when buying
+
+handle: (context, data)->
+
+    instrument  =   data.instruments[0]
+    price       =   instrument.close[instrument.close.length - 1]
+
+    # INDICATORS
+    # BOLLINGER BANDS
+    results = talib.BBANDS
+        inReal : instrument.close
+        startIdx: 0
+        endIdx: instrument.close.length-1
+        optInTimePeriod:20
+        optInNbDevUp : 2
+        optInNbDevDn: 2
+        # MAType: 0=SMA, 1=EMA, 2=WMA, 3=DEMA, 4=TEMA, 5=TRIMA, 6=KAMA, 7=MAMA, 8=T3 (Default=SMA)
+        optInMAType : 1
+    A1 = _.last(results.outRealUpperBand)
+    C = _.last(results.outRealMiddleBand)
+    A2 = _.last(results.outRealLowerBand)
+
+    results1 = talib.BBANDS
+        inReal : instrument.close
+        startIdx: 0
+        endIdx: instrument.close.length-1
+        optInTimePeriod:20
+        optInNbDevUp : 1
+        optInNbDevDn: 1
+        # MAType: 0=SMA, 1=EMA, 2=WMA, 3=DEMA, 4=TEMA, 5=TRIMA, 6=KAMA, 7=MAMA, 8=T3 (Default=SMA)
+        optInMAType : 1
+    B1 = _.last(results1.outRealUpperBand)
+    C2 = _.last(results1.outRealMiddleBand)
+    B2 = _.last(results1.outRealLowerBand)
+
+
+    # PLOT SECTION
+    plot
+        Price: instrument.price
+        BBtop1: A1
+        BBmid1: C
+        BBbot1: A2
+        BBtop2: B1
+        #BBmid1: C
+        BBbot2: B2 
+        EMAFast: instrument.ema(context.emafast)
+        EMASlow: instrument.ema(context.emaslow)
+
+    plotMark
+        #xdetectini: xdetectini              # Scalp opportunity start
+        #xdetectend: xdetectend              # Scalp opportunity end
+
+    
+    # PERFORMANCE REPORT SECTION
+    
+    close = instrument.close[instrument.close.length-1]
+    storage.startBase ?= @portfolios[instrument.market].positions[instrument.base()].amount
+    storage.startAsset ?= @portfolios[instrument.market].positions[instrument.asset()].amount
+    storage.startPrice ?= close
+    curBase = @portfolios[instrument.market].positions[instrument.base()].amount
+    curAsset = @portfolios[instrument.market].positions[instrument.asset()].amount
+    startBaseEquiv = storage.startBase + storage.startAsset * storage.startPrice
+    startAssetEquiv = storage.startAsset + storage.startBase / storage.startPrice
+    curBaseEquiv = curBase + curAsset * close
+    curAssetEquiv = curAsset + curBase / close
+    gainBH = 100 * (close / storage.startPrice - 1)
+    gainBot = 100 * (curBaseEquiv / startBaseEquiv - 1)
+    instbase = @portfolio.positions[instrument.base()].amount
+
+    debug '------------------------------------------------------------'
+    debug "B&H efficiency: " + _.round(gainBH, 2) + "%           |   Bot efficiency: " + _.round(gainBot, 2) + "%"
+    debug 'Instrument base    '+instbase.toFixed(6)+ '        |   Assets '+@portfolio.positions[instrument.asset()].amount
+    debug 'Trades won: '+context.tradeswon+'                     |   Trades lost: '+context.tradeslost
+    #debug 'open2: '+open2 + ' open3: '+open3
+    
+    
+    #DECISIONS BASED ON BBANDS
+    #if (instrument.price<=lowerband && instrument.ema(context.emafast)>instrument.ema(context.emaslow))
+    if instrument.price>=B1  && instrument.ema(context.emafast)>instrument.ema(context.emaslow)
+        #context.bblowcount++
+        #if context.bblowcount>=context.bblowdelay
+            context.buysignal='on'
+            context.quickscalp='on'
+            #warn 'Trading bb opportunity identified'
+    #if instrument.price>=upperband or instrument.ema(context.emafast)<instrument.ema(context.emaslow)
+    if instrument.price<=B2 or instrument.ema(context.emafast)<instrument.ema(context.emaslow)
+        context.buysignal='off'
+        context.quickscalp='off'
+        #warn 'Trading bb opportunity finished'
+
+
+    # BUY OR SELL EXECUTION SECTION    
+    if context.buysignal=='on' 
+            if @portfolio.positions[instrument.base()].amount > 0
+                context.lastbought=instrument.price
+                trading.buy instrument
+
+
+    if context.buysignal=='off'
+            if @portfolio.positions[instrument.asset()].amount > 0
+                try 
+                  trading.sell instrument
+
+
+                  if context.lastbought>instrument.price
+                      context.tradeslost++
+                  else
+                      context.tradeswon++
+
+                  context.lastbought=0
+                catch e
+                    if /insufficient funds/i.exec e
+                      debug "Insufficient funds error"
+                    if /minimum order amount/i.exec e
+                      #debug "Minimum order amount error"
+                    else 
+                      throw e # rethrow an unhandled exception                
+
