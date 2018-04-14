@@ -1,5 +1,4 @@
 ###
-Crypto Strategies
 A. BB Bot
 
 Strategy is based on Bollinger Bands indicator
@@ -94,9 +93,9 @@ handle: (context, data)->
     instbase = @portfolio.positions[instrument.base()].amount
 
     debug '------------------------------------------------------------'
-    debug "B&H efficiency: " + _.round(gainBH, 2) + "%           |   Bot efficiency: " + _.round(gainBot, 2) + "%"
-    debug 'Instrument base    '+instbase.toFixed(6)+ '        |   Assets '+@portfolio.positions[instrument.asset()].amount
-    debug 'Trades won: '+context.tradeswon+'                     |   Trades lost: '+context.tradeslost
+    debug "B&H efficiency: " + _.round(gainBH, 2) + "% Â Â Â Â Â Â Â Â Â Â |Â Â Â Bot efficiency: " + _.round(gainBot, 2) + "%"
+    debug 'Instrument base    '+instbase.toFixed(6)+ 'Â Â Â Â Â Â Â Â |Â Â Â Assets '+@portfolio.positions[instrument.asset()].amount
+    debug 'Trades won: '+context.tradeswon+'Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â |Â Â Â Trades lost: '+context.tradeslost
     #debug 'open2: '+open2 + ' open3: '+open3
     
     
